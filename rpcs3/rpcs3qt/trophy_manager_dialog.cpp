@@ -1,4 +1,14 @@
-// TODO: Fix header order
+#include "trophy_manager_dialog.h"
+
+#include "stdafx.h"
+
+#include "Utilities/Log.h"
+#include "Utilities/StrUtil.h"
+#include "rpcs3/Emu/VFS.h"
+#include "Emu/System.h"
+
+#include "Emu/Memory/Memory.h"
+#include "Emu/Cell/Modules/sceNpTrophy.h"
 
 #include <QHeaderView>
 #include <QVBoxLayout>
@@ -8,18 +18,8 @@
 #include <QPixmap>
 #include <QTableWidget>
 #include <QDesktopWidget>
-
-#include "stdafx.h"
-
-#include "rpcs3/Emu/VFS.h"
-#include "Utilities/Log.h"
-#include "Utilities/StrUtil.h"
-#include "Emu/System.h"
-
-#include "Emu/Memory/Memory.h"
-#include "Emu/Cell/Modules/sceNpTrophy.h"
-
-#include "trophy_manager_dialog.h"
+#include <QSlider>
+#include <QLabel>
 
 static const int m_TROPHY_ICON_HEIGHT = 75;
 
@@ -60,6 +60,13 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget()
 	check_unlock_trophy->setCheckable(true);
 	check_unlock_trophy->setChecked(true);
 
+	QLabel* slider_label = new QLabel();
+	slider_label->setText(QString("Icon Size: %0").arg(m_TROPHY_ICON_HEIGHT));
+
+	QSlider* icon_slider = new QSlider(Qt::Horizontal);
+	icon_slider->setRange(25, 225);
+	icon_slider->setValue(m_TROPHY_ICON_HEIGHT);
+
 	// Other button(s)
 	QPushButton* butt_close = new QPushButton(tr("Close"));
 
@@ -70,6 +77,10 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget()
 	settings_layout->addWidget(check_lock_trophy);
 	settings_layout->addWidget(check_unlock_trophy);
 	settings_layout->addWidget(check_hidden_trophy);
+	QHBoxLayout* slider_layout = new QHBoxLayout();
+	slider_layout->addWidget(slider_label);
+	slider_layout->addWidget(icon_slider);
+	settings_layout->addLayout(slider_layout);
 	settings_layout->addStretch(0);
 	settings->setLayout(settings_layout);
 
@@ -123,6 +134,28 @@ bool trophy_manager_dialog::LoadTrophyFolderToDB(const std::string& trop_name, c
 		return false;
 	}
 
+	for (int trophy_id = 0; trophy_id < game_trophy_data->trop_usr->GetTrophiesCount(); ++trophy_id)
+	{
+		// Figure out how many zeros are needed for padding.  (either 0, 1, or 2)
+		QString padding = "";
+		if (trophy_id < 10)
+		{
+			padding = "00";
+		}
+		else if (trophy_id < 100)
+		{
+			padding = "0";
+		}
+
+		QPixmap trophy_icon;
+		QString path = qstr(game_trophy_data->path) + "TROP" + padding + QString::number(trophy_id) + ".PNG";
+		if (!trophy_icon.load(path))
+		{
+			LOG_ERROR(GENERAL, "Failed to load trophy icon for trophy %n %s", trophy_id, game_trophy_data->path);
+		}
+		game_trophy_data->trophy_images.emplace_back(std::move(trophy_icon));
+	}
+
 	game_trophy_data->trop_config.Read(config.to_string());
 	m_trophies_db.push_back(std::move(game_trophy_data));
 	config.release();
@@ -133,11 +166,6 @@ void trophy_manager_dialog::PopulateUI()
 {
 	for (auto& data : m_trophies_db)
 	{
-		QTreeWidgetItem* game_root = new QTreeWidgetItem(m_trophy_tree);
-		game_root->setText(0, qstr(data->game_name));
-		game_root->setExpanded(true);
-		m_trophy_tree->addTopLevelItem(game_root);
-
 		std::shared_ptr<rXmlNode> trophy_base = data->trop_config.GetRoot();
 		if (trophy_base->GetChildren()->GetName() == "trophyconf")
 		{
@@ -146,7 +174,13 @@ void trophy_manager_dialog::PopulateUI()
 		else
 		{
 			LOG_ERROR(GENERAL, "Root name does not match trophyconf in trophy. Name received: %s", trophy_base->GetChildren()->GetName());
+			continue;
 		}
+
+		QTreeWidgetItem* game_root = new QTreeWidgetItem(m_trophy_tree);
+		game_root->setText(0, qstr(data->game_name));
+		game_root->setExpanded(true);
+		m_trophy_tree->addTopLevelItem(game_root);
 
 		for (std::shared_ptr<rXmlNode> n = trophy_base->GetChildren(); n; n = n->GetNext())
 		{		
@@ -159,21 +193,17 @@ void trophy_manager_dialog::PopulateUI()
 			s32 trophy_id = atoi(n->GetAttribute("id").c_str());
 
 			// Don't show hidden trophies
-			if (n->GetAttribute("hidden")[0] == 'y' && !data->trop_usr->GetTrophyUnlockState(trophy_id))
-			{
-				// TODO: Add this anyways to list for efficiency, but call "setHidden" and store trophy_id in userdata for efficient access later.
-				continue;
-			}
+			bool hidden = n->GetAttribute("hidden")[0] == 'y' && !data->trop_usr->GetTrophyUnlockState(trophy_id);
 
 			// Get data (stolen graciously from sceNpTrophy.cpp)
 			SceNpTrophyDetails details;
 			details.trophyId = trophy_id;
 			QString trophy_type = "";
 			switch (n->GetAttribute("ttype")[0]) {
-			case 'B': details.trophyGrade = SCE_NP_TROPHY_GRADE_BRONZE;   trophy_type = "bronze";   break;
-			case 'S': details.trophyGrade = SCE_NP_TROPHY_GRADE_SILVER;   trophy_type = "silver";   break;
-			case 'G': details.trophyGrade = SCE_NP_TROPHY_GRADE_GOLD;     trophy_type = "gold";     break;
-			case 'P': details.trophyGrade = SCE_NP_TROPHY_GRADE_PLATINUM; trophy_type = "platinum"; break;
+			case 'B': details.trophyGrade = SCE_NP_TROPHY_GRADE_BRONZE;   trophy_type = "Bronze";   break;
+			case 'S': details.trophyGrade = SCE_NP_TROPHY_GRADE_SILVER;   trophy_type = "Silver";   break;
+			case 'G': details.trophyGrade = SCE_NP_TROPHY_GRADE_GOLD;     trophy_type = "Gold";     break;
+			case 'P': details.trophyGrade = SCE_NP_TROPHY_GRADE_PLATINUM; trophy_type = "Platinum"; break;
 			}
 
 			switch (n->GetAttribute("hidden")[0]) {
@@ -194,32 +224,16 @@ void trophy_manager_dialog::PopulateUI()
 					memcpy(details.description, detail.c_str(), std::min((size_t)SCE_NP_TROPHY_DESCR_MAX_SIZE, detail.length() + 1));
 				}
 			}
-			// Figure out how many zeros are needed for padding.  (either 0, 1, or 2)
-			QString padding = "";
-			if (trophy_id < 10)
-			{
-				padding = "00";
-			}
-			else if (trophy_id < 100)
-			{
-				padding = "0";
-			}
-			
-			QPixmap trophy_icon;
-			QString path = qstr(data->path) + "TROP" + padding + QString::number(trophy_id) + ".PNG";
-			if (!trophy_icon.load(path))
-			{
-				LOG_ERROR(GENERAL, "Failed to load trophy icon for trophy %n %s", trophy_id, data->path);
-			}
-			trophy_icon = trophy_icon.scaledToHeight(m_TROPHY_ICON_HEIGHT);
 
 			QTreeWidgetItem* trophy_item = new QTreeWidgetItem(game_root);
-			trophy_item->setData(0, Qt::DecorationRole, trophy_icon);
+			trophy_item->setData(0, Qt::DecorationRole, data->trophy_images[trophy_id].scaledToHeight(m_TROPHY_ICON_HEIGHT));
 			trophy_item->setSizeHint(0, QSize(-1, m_TROPHY_ICON_HEIGHT));
 			trophy_item->setText(1, qstr(details.name));
 			trophy_item->setText(2, qstr(details.description));
 			trophy_item->setText(3, trophy_type);
 			trophy_item->setText(4, data->trop_usr->GetTrophyUnlockState(trophy_id) ? "Unlocked" : "Locked");
+			trophy_item->setData(5, Qt::UserRole, trophy_id);
+			trophy_item->setHidden(hidden);
 
 			game_root->addChild(trophy_item);
 		}

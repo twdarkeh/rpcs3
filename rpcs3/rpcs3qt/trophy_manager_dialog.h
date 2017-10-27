@@ -7,12 +7,14 @@
 #include "Utilities/rXml.h"
 
 #include <QWidget>
+#include <QPixmap>
 #include <QTreeWidget>
 
 struct GameTrophiesData
 {
 	std::unique_ptr<TROPUSRLoader> trop_usr;
 	rXmlDocument trop_config; // I'd like to use unique but the protocol inside of the function passes around shared pointers..
+	std::vector<QPixmap> trophy_images;
 	std::string game_name;
 	std::string path;
 };
