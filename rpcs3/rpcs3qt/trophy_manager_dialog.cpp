@@ -1,4 +1,5 @@
 #include "trophy_manager_dialog.h"
+#include "trophy_tree_widget_item.h"
 
 #include "stdafx.h"
 
@@ -28,7 +29,7 @@ namespace
 	constexpr auto qstr = QString::fromStdString;
 }
 
-trophy_manager_dialog::trophy_manager_dialog() : QWidget()
+trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_col_sort_order(Qt::AscendingOrder) 
 {
 	// Nonspecific widget settings
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
@@ -37,12 +38,14 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget()
 
 	// Trophy Tree
 	m_trophy_tree = new QTreeWidget();
-	m_trophy_tree->setColumnCount(5);
+	m_trophy_tree->setColumnCount(6);
 
 	QStringList column_names;
-	column_names << tr("Icon") << tr("Name") << tr("Description") << tr("Type") << tr("Status");
+	column_names << tr("Icon") << tr("Name") << tr("Description") << tr("Type") << tr("Status") << tr("ID");
 	m_trophy_tree->setHeaderLabels(column_names);
 	m_trophy_tree->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
+	m_trophy_tree->header()->setStretchLastSection(false);
+	m_trophy_tree->setSortingEnabled(true);
 
 	LoadTrophyFolderToDB("NPWR02097_00", "ARKEDO SERIES -2 SWAP"); // arkedo
 	PopulateUI();
@@ -105,6 +108,8 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget()
 	connect(butt_close, &QAbstractButton::pressed, [this]() {
 		close();
 	});
+	
+	connect(m_trophy_tree->header(), &QHeaderView::sectionClicked, this, &trophy_manager_dialog::OnColClicked);
 }
 
 bool trophy_manager_dialog::LoadTrophyFolderToDB(const std::string& trop_name, const std::string& game_name)
@@ -160,6 +165,23 @@ bool trophy_manager_dialog::LoadTrophyFolderToDB(const std::string& trop_name, c
 	m_trophies_db.push_back(std::move(game_trophy_data));
 	config.release();
 	return true;
+}
+
+void trophy_manager_dialog::OnColClicked(int col)
+{
+	if (col == 0) return; // Don't "sort" icons.
+
+	if (col == m_sort_column)
+	{
+		m_col_sort_order = (m_col_sort_order == Qt::AscendingOrder) ? Qt::DescendingOrder : Qt::AscendingOrder;
+	}
+	else
+	{
+		m_col_sort_order = Qt::AscendingOrder;
+	}
+	m_sort_column = col;
+
+	m_trophy_tree->sortByColumn(m_sort_column, m_col_sort_order);
 }
 
 void trophy_manager_dialog::PopulateUI()
@@ -225,14 +247,14 @@ void trophy_manager_dialog::PopulateUI()
 				}
 			}
 
-			QTreeWidgetItem* trophy_item = new QTreeWidgetItem(game_root);
-			trophy_item->setData(0, Qt::DecorationRole, data->trophy_images[trophy_id].scaledToHeight(m_TROPHY_ICON_HEIGHT));
-			trophy_item->setSizeHint(0, QSize(-1, m_TROPHY_ICON_HEIGHT));
-			trophy_item->setText(1, qstr(details.name));
-			trophy_item->setText(2, qstr(details.description));
-			trophy_item->setText(3, trophy_type);
-			trophy_item->setText(4, data->trop_usr->GetTrophyUnlockState(trophy_id) ? "Unlocked" : "Locked");
-			trophy_item->setData(5, Qt::UserRole, trophy_id);
+			trophy_tree_widget_item* trophy_item = new trophy_tree_widget_item(game_root);
+			trophy_item->setData(TrophyColumns::Icon, Qt::DecorationRole, data->trophy_images[trophy_id].scaledToHeight(m_TROPHY_ICON_HEIGHT));
+			trophy_item->setSizeHint(TrophyColumns::Icon, QSize(-1, m_TROPHY_ICON_HEIGHT));
+			trophy_item->setText(TrophyColumns::Name, qstr(details.name));
+			trophy_item->setText(TrophyColumns::Description, qstr(details.description));
+			trophy_item->setText(TrophyColumns::Type, trophy_type);
+			trophy_item->setText(TrophyColumns::IsUnlocked, data->trop_usr->GetTrophyUnlockState(trophy_id) ? "Unlocked" : "Locked");
+			trophy_item->setText(TrophyColumns::Id, QString::number(trophy_id));
 			trophy_item->setHidden(hidden);
 
 			game_root->addChild(trophy_item);

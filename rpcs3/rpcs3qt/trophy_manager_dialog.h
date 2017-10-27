@@ -19,10 +19,22 @@ struct GameTrophiesData
 	std::string path;
 };
 
+enum TrophyColumns
+{
+	Icon = 0,
+	Name = 1,
+	Description = 2,
+	Type = 3,
+	IsUnlocked = 4,
+	Id = 5,
+};
+
 class trophy_manager_dialog : public QWidget
 {
 public:
 	explicit trophy_manager_dialog();
+private Q_SLOTS:
+	void OnColClicked(int col);
 private:
 	/** Loads a trophy folder. 
 	Returns true if successful.  Does not attempt to install if failure occurs, like sceNpTrophy.
@@ -36,6 +48,9 @@ private:
 
 	std::vector<std::unique_ptr<GameTrophiesData>> m_trophies_db; //! Holds all the trophy information.
 	QTreeWidget* m_trophy_tree; //! UI element to display trophy stuff.
+
+	int m_sort_column = 0; //! Tracks which row we are sorting by.
+	Qt::SortOrder m_col_sort_order = Qt::AscendingOrder; //! Trakcs order in which we are sorting.
 };
 
 #endif

@@ -631,6 +631,9 @@
     <ClInclude Include="rpcs3qt\trophy_manager_dialog.h">
       <Filter>Gui\trophy</Filter>
     </ClInclude>
+    <ClInclude Include="rpcs3qt\trophy_tree_widget_item.h">
+      <Filter>Gui\trophy</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="debug\moc_predefs.h.cbt">
