@@ -3,8 +3,11 @@
 #include <QHeaderView>
 #include <QVBoxLayout>
 #include <QCheckBox>
+#include <QPushButton>
 #include <QGroupBox>
+#include <QPixmap>
 #include <QTableWidget>
+#include <QDesktopWidget>
 
 #include "stdafx.h"
 
@@ -18,11 +21,7 @@
 
 #include "trophy_manager_dialog.h"
 
-struct TrophyData
-{
-	SceNpTrophyDetails details;
-	std::vector<uchar> iconBuf;
-};
+static const int m_TROPHY_ICON_HEIGHT = 75;
 
 namespace
 {
@@ -31,50 +30,70 @@ namespace
 
 trophy_manager_dialog::trophy_manager_dialog() : QWidget()
 {
-	setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
-
-	// Buttons
-	QCheckBox* butt_lock_trophy = new QCheckBox(tr("Show Locked Trophies"));
-	butt_lock_trophy->setCheckable(true);
-	butt_lock_trophy->setChecked(true);
-
-	QCheckBox* butt_unlock_trophy = new QCheckBox(tr("Show Unlocked Trophies"));
-	butt_unlock_trophy->setCheckable(true);
-	butt_unlock_trophy->setChecked(true);
-
-	QGroupBox* settings = new QGroupBox(tr("Trophy View Options"));
+	// Nonspecific widget settings
+	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+	setWindowTitle(tr("Trophy Manager"));
+	setWindowIcon(QIcon(":/rpcs3.ico"));
 
 	// Trophy Tree
 	m_trophy_tree = new QTreeWidget();
-	m_trophy_tree->setColumnCount(4);
+	m_trophy_tree->setColumnCount(5);
 
 	QStringList column_names;
-	column_names << tr("Name") << tr("Description") << tr("Type") << tr("Status");
+	column_names << tr("Icon") << tr("Name") << tr("Description") << tr("Type") << tr("Status");
 	m_trophy_tree->setHeaderLabels(column_names);
-
 	m_trophy_tree->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
 
 	LoadTrophyFolderToDB("NPWR02097_00", "ARKEDO SERIES -2 SWAP"); // arkedo
 	PopulateUI();
 
+	// Checkboxes to control dialog
+	QCheckBox* check_lock_trophy = new QCheckBox(tr("Show Locked Trophies"));
+	check_lock_trophy->setCheckable(true);
+	check_lock_trophy->setChecked(true);
+
+	QCheckBox* check_unlock_trophy = new QCheckBox(tr("Show Unlocked Trophies"));
+	check_unlock_trophy->setCheckable(true);
+	check_unlock_trophy->setChecked(true);
+
+	QCheckBox* check_hidden_trophy = new QCheckBox(tr("Show Hidden Trophies"));
+	check_unlock_trophy->setCheckable(true);
+	check_unlock_trophy->setChecked(true);
+
+	// Other button(s)
+	QPushButton* butt_close = new QPushButton(tr("Close"));
+
 	// LAYOUTS
+	QGroupBox* settings = new QGroupBox(tr("Trophy View Options"));
+	settings->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 	QVBoxLayout* settings_layout = new QVBoxLayout();
-	settings_layout->addWidget(butt_lock_trophy);
-	settings_layout->addWidget(butt_unlock_trophy);
-	settings_layout->addStretch(1);
+	settings_layout->addWidget(check_lock_trophy);
+	settings_layout->addWidget(check_unlock_trophy);
+	settings_layout->addWidget(check_hidden_trophy);
+	settings_layout->addStretch(0);
 	settings->setLayout(settings_layout);
 
 	QHBoxLayout* settings_boxes_layout = new QHBoxLayout();
 	settings_boxes_layout->addWidget(settings);
 	settings_boxes_layout->addStretch();
 
+	QHBoxLayout* buttons_layout = new QHBoxLayout();
+	buttons_layout->addStretch();
+	buttons_layout->addWidget(butt_close);
+
 	QVBoxLayout* all_layout = new QVBoxLayout(this);
-	//all_layout->addLayout(settings_boxes_layout);
+	all_layout->addLayout(settings_boxes_layout);
 	all_layout->addWidget(m_trophy_tree);
-	//all_layout->addStretch(1); // why doesn't this stretch make everything fine?
+	all_layout->addLayout(buttons_layout);
 	setLayout(all_layout);
 
-	resize(1000, 1000);
+	QSize defaultSize = QDesktopWidget().availableGeometry().size() * 0.7;
+	resize(defaultSize);
+
+	// Make connects
+	connect(butt_close, &QAbstractButton::pressed, [this]() {
+		close();
+	});
 }
 
 bool trophy_manager_dialog::LoadTrophyFolderToDB(const std::string& trop_name, const std::string& game_name)
@@ -90,6 +109,7 @@ bool trophy_manager_dialog::LoadTrophyFolderToDB(const std::string& trop_name, c
 	std::unique_ptr<GameTrophiesData> game_trophy_data = std::make_unique<GameTrophiesData>();
 
 	game_trophy_data->game_name = game_name;
+	game_trophy_data->path = vfs::get(trophyPath + "/");
 	game_trophy_data->trop_usr.reset(new TROPUSRLoader());
 	std::string trophyUsrPath = trophyPath + "/TROPUSR.DAT";
 	std::string trophyConfPath = trophyPath + "/TROPCONF.SFM";
@@ -103,20 +123,9 @@ bool trophy_manager_dialog::LoadTrophyFolderToDB(const std::string& trop_name, c
 		return false;
 	}
 
-	rXmlDocument doc;
-	doc.Read(config.to_string());
-	std::shared_ptr<rXmlNode> trophy_base = doc.GetRoot();
-	if (trophy_base->GetChildren()->GetName() == "trophyconf")
-	{
-		trophy_base = trophy_base->GetChildren();
-	}
-	else
-	{
-		LOG_ERROR(GENERAL, "Root name does not match trophyconf in trophy. Name received: %s", trophy_base->GetChildren()->GetName());
-	}
-
-	game_trophy_data->trop_config = trophy_base;
+	game_trophy_data->trop_config.Read(config.to_string());
 	m_trophies_db.push_back(std::move(game_trophy_data));
+	config.release();
 	return true;
 }
 
@@ -129,7 +138,17 @@ void trophy_manager_dialog::PopulateUI()
 		game_root->setExpanded(true);
 		m_trophy_tree->addTopLevelItem(game_root);
 
-		for (std::shared_ptr<rXmlNode> n = data->trop_config->GetChildren(); n; n = n->GetNext())
+		std::shared_ptr<rXmlNode> trophy_base = data->trop_config.GetRoot();
+		if (trophy_base->GetChildren()->GetName() == "trophyconf")
+		{
+			trophy_base = trophy_base->GetChildren();
+		}
+		else
+		{
+			LOG_ERROR(GENERAL, "Root name does not match trophyconf in trophy. Name received: %s", trophy_base->GetChildren()->GetName());
+		}
+
+		for (std::shared_ptr<rXmlNode> n = trophy_base->GetChildren(); n; n = n->GetNext())
 		{		
 			// Only show trophies.
 			if (n->GetName() != "trophy")
@@ -175,12 +194,32 @@ void trophy_manager_dialog::PopulateUI()
 					memcpy(details.description, detail.c_str(), std::min((size_t)SCE_NP_TROPHY_DESCR_MAX_SIZE, detail.length() + 1));
 				}
 			}
+			// Figure out how many zeros are needed for padding.  (either 0, 1, or 2)
+			QString padding = "";
+			if (trophy_id < 10)
+			{
+				padding = "00";
+			}
+			else if (trophy_id < 100)
+			{
+				padding = "0";
+			}
+			
+			QPixmap trophy_icon;
+			QString path = qstr(data->path) + "TROP" + padding + QString::number(trophy_id) + ".PNG";
+			if (!trophy_icon.load(path))
+			{
+				LOG_ERROR(GENERAL, "Failed to load trophy icon for trophy %n %s", trophy_id, data->path);
+			}
+			trophy_icon = trophy_icon.scaledToHeight(m_TROPHY_ICON_HEIGHT);
 
 			QTreeWidgetItem* trophy_item = new QTreeWidgetItem(game_root);
-			trophy_item->setText(0, qstr(details.name));
-			trophy_item->setText(1, qstr(details.description));
-			trophy_item->setText(2, trophy_type);
-			trophy_item->setText(3, data->trop_usr->GetTrophyUnlockState(trophy_id) ? "Unlocked" : "Locked");
+			trophy_item->setData(0, Qt::DecorationRole, trophy_icon);
+			trophy_item->setSizeHint(0, QSize(-1, m_TROPHY_ICON_HEIGHT));
+			trophy_item->setText(1, qstr(details.name));
+			trophy_item->setText(2, qstr(details.description));
+			trophy_item->setText(3, trophy_type);
+			trophy_item->setText(4, data->trop_usr->GetTrophyUnlockState(trophy_id) ? "Unlocked" : "Locked");
 
 			game_root->addChild(trophy_item);
 		}

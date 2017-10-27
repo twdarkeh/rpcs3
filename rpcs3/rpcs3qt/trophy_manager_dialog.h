@@ -12,8 +12,9 @@
 struct GameTrophiesData
 {
 	std::unique_ptr<TROPUSRLoader> trop_usr;
-	std::shared_ptr<rXmlNode> trop_config; // I'd like to use unique but the protocol inside of the function passes around shared pointers..
+	rXmlDocument trop_config; // I'd like to use unique but the protocol inside of the function passes around shared pointers..
 	std::string game_name;
+	std::string path;
 };
 
 class trophy_manager_dialog : public QWidget
