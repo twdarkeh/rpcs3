@@ -24,7 +24,10 @@
 #include <QSlider>
 #include <QLabel>
 #include <QDir>
+#include <QMenu>
 #include <QDirIterator>
+#include <QDesktopServices>
+#include <QUrl>
 
 static const int m_TROPHY_ICON_HEIGHT = 75;
 static const char* m_TROPHY_DIR = "/dev_hdd0/home/00000001/trophy/";
@@ -57,6 +60,7 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 	m_trophy_tree->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
 	m_trophy_tree->header()->setStretchLastSection(false);
 	m_trophy_tree->setSortingEnabled(true);
+	m_trophy_tree->setContextMenuPolicy(Qt::CustomContextMenu);
 
 	// Populate the trophy database
 	YAML::Node trophy_map = YAML::Load(fs::file{ fs::get_config_dir() + "/trophy_mapping.yml", fs::read + fs::create }.to_string());
@@ -139,6 +143,8 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 		m_show_hidden_trophies = val;
 		ApplyFilter();
 	});
+
+	connect(m_trophy_tree, &QTableWidget::customContextMenuRequested, this, &trophy_manager_dialog::ShowContextMenu);
 }
 
 bool trophy_manager_dialog::LoadTrophyFolderToDB(const std::string& trop_name, const std::string& game_name)
@@ -264,6 +270,36 @@ void trophy_manager_dialog::ApplyFilter()
 			node->setHidden(hide);
 		}
 	}
+}
+
+void trophy_manager_dialog::ShowContextMenu(const QPoint& loc)
+{
+	QPoint globalPos = m_trophy_tree->mapToGlobal(loc);
+	QMenu* menu = new QMenu();
+	QTreeWidgetItem* item = m_trophy_tree->currentItem();
+
+	// If top level node
+	QAction* show_trophy_dir = new QAction("Open Trophy Dir", menu);
+
+	// Only two levels in this tree. So getting the index as such works.
+	int db_ind;
+	bool is_game_node = m_trophy_tree->indexOfTopLevelItem(item) != -1;
+	if (is_game_node)
+	{
+		db_ind = item->data(1, Qt::UserRole).toInt();
+	}
+	else
+	{
+		db_ind = item->parent()->data(1, Qt::UserRole).toInt();
+	}
+
+	connect(show_trophy_dir, &QAction::triggered, [=]() {
+		QString path = qstr(m_trophies_db[db_ind]->path);
+		QDesktopServices::openUrl(QUrl("file:///" + path));
+	});
+	
+	menu->addAction(show_trophy_dir);
+	menu->exec(globalPos);
 }
 
 void trophy_manager_dialog::PopulateUI()

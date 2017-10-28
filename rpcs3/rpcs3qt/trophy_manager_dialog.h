@@ -38,6 +38,7 @@ private Q_SLOTS:
 	void OnColClicked(int col);
 	void ResizeTrophyIcons(int val);
 	void ApplyFilter();
+	void ShowContextMenu(const QPoint& pos);
 private:
 	/** Loads a trophy folder. 
 	Returns true if successful.  Does not attempt to install if failure occurs, like sceNpTrophy.
