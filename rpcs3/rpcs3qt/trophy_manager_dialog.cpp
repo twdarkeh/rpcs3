@@ -11,6 +11,8 @@
 #include "Emu/Memory/Memory.h"
 #include "Emu/Cell/Modules/sceNpTrophy.h"
 
+#include "yaml-cpp/yaml.h"
+
 #include <QHeaderView>
 #include <QVBoxLayout>
 #include <QCheckBox>
@@ -21,12 +23,16 @@
 #include <QDesktopWidget>
 #include <QSlider>
 #include <QLabel>
+#include <QDir>
+#include <QDirIterator>
 
 static const int m_TROPHY_ICON_HEIGHT = 75;
+static const char* m_TROPHY_DIR = "/dev_hdd0/home/00000001/trophy/";
 
 namespace
 {
 	constexpr auto qstr = QString::fromStdString;
+	inline std::string sstr(const QString& _in) { return _in.toUtf8().toStdString(); }
 }
 
 trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_col_sort_order(Qt::AscendingOrder) 
@@ -35,6 +41,11 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 	setWindowTitle(tr("Trophy Manager"));
 	setWindowIcon(QIcon(":/rpcs3.ico"));
+
+	// HACK: dev_hdd0 must be mounted for vfs to work for loading trophies.
+	const std::string emu_dir_ = g_cfg.vfs.emulator_dir;
+	const std::string emu_dir = emu_dir_.empty() ? fs::get_config_dir() : emu_dir_;
+	vfs::mount("dev_hdd0", fmt::replace_all(g_cfg.vfs.dev_hdd0, "$(EmulatorDir)", emu_dir));
 
 	// Trophy Tree
 	m_trophy_tree = new QTreeWidget();
@@ -47,7 +58,22 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 	m_trophy_tree->header()->setStretchLastSection(false);
 	m_trophy_tree->setSortingEnabled(true);
 
-	LoadTrophyFolderToDB("NPWR02097_00", "ARKEDO SERIES -2 SWAP"); // arkedo
+	// Populate the trophy database
+	YAML::Node trophy_map = YAML::Load(fs::file{ fs::get_config_dir() + "/trophy_mapping.yml", fs::read + fs::create }.to_string());
+	if (trophy_map.IsMap())
+	{
+		QDirIterator dir_iter(qstr(vfs::get(m_TROPHY_DIR)));
+		while (dir_iter.hasNext()) 
+		{
+			std::string dirName = sstr(dir_iter.fileName());
+			if (auto game = trophy_map[dirName])
+			{
+				LoadTrophyFolderToDB(dirName, game.Scalar());
+			}
+			dir_iter.next();
+		}
+	}
+
 	PopulateUI();
 
 	// Checkboxes to control dialog
@@ -114,12 +140,7 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 
 bool trophy_manager_dialog::LoadTrophyFolderToDB(const std::string& trop_name, const std::string& game_name)
 {
-	std::string trophyPath = "/dev_hdd0/home/00000001/trophy/" + trop_name;
-
-	// HACK: dev_hdd0 must be mounted for vfs to work so I can load trophies. Consider moving mounting to init and load for redundancy w/o hack?
-	const std::string emu_dir_ = g_cfg.vfs.emulator_dir;
-	const std::string emu_dir = emu_dir_.empty() ? fs::get_config_dir() : emu_dir_;
-	vfs::mount("dev_hdd0", fmt::replace_all(g_cfg.vfs.dev_hdd0, "$(EmulatorDir)", emu_dir));
+	std::string trophyPath = m_TROPHY_DIR + trop_name;
 
 	// Populate GameTrophiesData
 	std::unique_ptr<GameTrophiesData> game_trophy_data = std::make_unique<GameTrophiesData>();
@@ -201,7 +222,6 @@ void trophy_manager_dialog::PopulateUI()
 
 		QTreeWidgetItem* game_root = new QTreeWidgetItem(m_trophy_tree);
 		game_root->setText(0, qstr(data->game_name));
-		game_root->setExpanded(true);
 		m_trophy_tree->addTopLevelItem(game_root);
 
 		for (std::shared_ptr<rXmlNode> n = trophy_base->GetChildren(); n; n = n->GetNext())
