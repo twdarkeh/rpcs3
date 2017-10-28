@@ -27,6 +27,7 @@ enum TrophyColumns
 	Type = 3,
 	IsUnlocked = 4,
 	Id = 5,
+	Hidden = 6,
 };
 
 class trophy_manager_dialog : public QWidget
@@ -36,6 +37,7 @@ public:
 private Q_SLOTS:
 	void OnColClicked(int col);
 	void ResizeTrophyIcons(int val);
+	void ApplyFilter();
 private:
 	/** Loads a trophy folder. 
 	Returns true if successful.  Does not attempt to install if failure occurs, like sceNpTrophy.
@@ -52,6 +54,10 @@ private:
 
 	int m_sort_column = 0; //! Tracks which row we are sorting by.
 	Qt::SortOrder m_col_sort_order = Qt::AscendingOrder; //! Trakcs order in which we are sorting.
+
+	bool m_show_hidden_trophies = false;
+	bool m_show_unlocked_trophies = true;
+	bool m_show_locked_trophies = true;
 };
 
 #endif

@@ -75,6 +75,7 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 	}
 
 	PopulateUI();
+	ApplyFilter();
 
 	// Checkboxes to control dialog
 	QCheckBox* check_lock_trophy = new QCheckBox(tr("Show Locked Trophies"));
@@ -136,7 +137,24 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 	});
 	
 	connect(m_trophy_tree->header(), &QHeaderView::sectionClicked, this, &trophy_manager_dialog::OnColClicked);
-	connect(icon_slider, &QSlider::valueChanged, this, &trophy_manager_dialog::ResizeTrophyIcons);
+	connect(icon_slider, &QSlider::valueChanged, this, [=](int val) {
+		slider_label->setText(QString("Icon Size: %0").arg(val));
+		ResizeTrophyIcons(val);
+	});
+	connect(check_lock_trophy, &QCheckBox::clicked, [this](bool val) {
+		m_show_locked_trophies = val;
+		ApplyFilter();
+	});
+
+	connect(check_unlock_trophy, &QCheckBox::clicked, [this](bool val) {
+		m_show_unlocked_trophies = val;
+		ApplyFilter();
+	});
+
+	connect(check_hidden_trophy, &QCheckBox::clicked, [this](bool val) {
+		m_show_hidden_trophies = val;
+		ApplyFilter();
+	});
 }
 
 bool trophy_manager_dialog::LoadTrophyFolderToDB(const std::string& trop_name, const std::string& game_name)
@@ -223,6 +241,40 @@ void trophy_manager_dialog::ResizeTrophyIcons(int size)
 	}
 }
 
+void trophy_manager_dialog::ApplyFilter()
+{
+	for (int i = 0; i < m_trophy_tree->topLevelItemCount(); ++i)
+	{
+		auto* game = m_trophy_tree->topLevelItem(i);
+		int db_pos = game->data(1, Qt::UserRole).toInt();
+
+		for (int j = 0; j < game->childCount(); ++j)
+		{
+			auto* node = game->child(j);
+			int trophy_id = node->text(TrophyColumns::Id).toInt();
+
+			// I could use boolean logic and reduce this to something much shorter and also much more confusing...
+			bool hidden = node->data(TrophyColumns::Hidden, Qt::UserRole).toBool();
+			bool trophy_unlocked = m_trophies_db[db_pos]->trop_usr->GetTrophyUnlockState(trophy_id);
+
+			bool hide = false;
+			if (trophy_unlocked && !m_show_unlocked_trophies)
+			{
+				hide = true;
+			}
+			if (!trophy_unlocked && !m_show_locked_trophies)
+			{
+				hide = true;
+			}
+			if (hidden && !trophy_unlocked && !m_show_hidden_trophies)
+			{
+				hide = true;
+			}
+			node->setHidden(hide);
+		}
+	}
+}
+
 void trophy_manager_dialog::PopulateUI()
 {
 	for (int i = 0; i < m_trophies_db.size(); ++i)
@@ -256,7 +308,7 @@ void trophy_manager_dialog::PopulateUI()
 			s32 trophy_id = atoi(n->GetAttribute("id").c_str());
 
 			// Don't show hidden trophies
-			bool hidden = n->GetAttribute("hidden")[0] == 'y' && !data->trop_usr->GetTrophyUnlockState(trophy_id);
+			bool hidden = n->GetAttribute("hidden")[0] == 'y';
 
 			// Get data (stolen graciously from sceNpTrophy.cpp)
 			SceNpTrophyDetails details;
@@ -296,7 +348,7 @@ void trophy_manager_dialog::PopulateUI()
 			trophy_item->setText(TrophyColumns::Type, trophy_type);
 			trophy_item->setText(TrophyColumns::IsUnlocked, data->trop_usr->GetTrophyUnlockState(trophy_id) ? "Unlocked" : "Locked");
 			trophy_item->setText(TrophyColumns::Id, QString::number(trophy_id));
-			trophy_item->setHidden(hidden);
+			trophy_item->setData(TrophyColumns::Hidden, Qt::UserRole, hidden);
 
 			game_root->addChild(trophy_item);
 		}
