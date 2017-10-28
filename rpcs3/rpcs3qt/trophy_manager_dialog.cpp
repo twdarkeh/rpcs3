@@ -97,9 +97,6 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 	icon_slider->setRange(25, 225);
 	icon_slider->setValue(m_TROPHY_ICON_HEIGHT);
 
-	// Other button(s)
-	QPushButton* butt_close = new QPushButton(tr("Close"));
-
 	// LAYOUTS
 	QGroupBox* settings = new QGroupBox(tr("Trophy View Options"));
 	settings->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
@@ -114,28 +111,15 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 	settings_layout->addStretch(0);
 	settings->setLayout(settings_layout);
 
-	QHBoxLayout* settings_boxes_layout = new QHBoxLayout();
-	settings_boxes_layout->addWidget(settings);
-	settings_boxes_layout->addStretch();
-
-	QHBoxLayout* buttons_layout = new QHBoxLayout();
-	buttons_layout->addStretch();
-	buttons_layout->addWidget(butt_close);
-
-	QVBoxLayout* all_layout = new QVBoxLayout(this);
-	all_layout->addLayout(settings_boxes_layout);
+	QHBoxLayout* all_layout = new QHBoxLayout(this);
+	all_layout->addWidget(settings);
 	all_layout->addWidget(m_trophy_tree);
-	all_layout->addLayout(buttons_layout);
 	setLayout(all_layout);
 
 	QSize defaultSize = QDesktopWidget().availableGeometry().size() * 0.7;
 	resize(defaultSize);
 
 	// Make connects
-	connect(butt_close, &QAbstractButton::pressed, [this]() {
-		close();
-	});
-	
 	connect(m_trophy_tree->header(), &QHeaderView::sectionClicked, this, &trophy_manager_dialog::OnColClicked);
 	connect(icon_slider, &QSlider::valueChanged, this, [=](int val) {
 		slider_label->setText(QString("Icon Size: %0").arg(val));
@@ -270,6 +254,13 @@ void trophy_manager_dialog::ApplyFilter()
 			{
 				hide = true;
 			}
+
+			// Special override to show *just* hidden trophies.
+			if (!m_show_unlocked_trophies && !m_show_locked_trophies && m_show_hidden_trophies)
+			{
+				hide = !hidden;
+			}
+
 			node->setHidden(hide);
 		}
 	}
@@ -293,9 +284,11 @@ void trophy_manager_dialog::PopulateUI()
 		}
 
 		QTreeWidgetItem* game_root = new QTreeWidgetItem(m_trophy_tree);
-		game_root->setText(0, qstr(data->game_name));
+		// Name is set later to include the trophy locked/unlocked count.
 		game_root->setData(1, Qt::UserRole, i);
 		m_trophy_tree->addTopLevelItem(game_root);
+
+		int unlocked_trophies = 0;
 
 		for (std::shared_ptr<rXmlNode> n = trophy_base->GetChildren(); n; n = n->GetNext())
 		{		
@@ -340,17 +333,25 @@ void trophy_manager_dialog::PopulateUI()
 				}
 			}
 
+			bool unlocked = data->trop_usr->GetTrophyUnlockState(trophy_id);
+			if (unlocked)
+			{
+				++unlocked_trophies;
+			}
+
 			trophy_tree_widget_item* trophy_item = new trophy_tree_widget_item(game_root);
 			trophy_item->setData(TrophyColumns::Icon, Qt::DecorationRole, data->trophy_images[trophy_id].scaledToHeight(m_TROPHY_ICON_HEIGHT));
 			trophy_item->setSizeHint(TrophyColumns::Icon, QSize(-1, m_TROPHY_ICON_HEIGHT));
 			trophy_item->setText(TrophyColumns::Name, qstr(details.name));
 			trophy_item->setText(TrophyColumns::Description, qstr(details.description));
 			trophy_item->setText(TrophyColumns::Type, trophy_type);
-			trophy_item->setText(TrophyColumns::IsUnlocked, data->trop_usr->GetTrophyUnlockState(trophy_id) ? "Unlocked" : "Locked");
+			trophy_item->setText(TrophyColumns::IsUnlocked, unlocked ? "Unlocked" : "Locked");
 			trophy_item->setText(TrophyColumns::Id, QString::number(trophy_id));
 			trophy_item->setData(TrophyColumns::Hidden, Qt::UserRole, hidden);
 
 			game_root->addChild(trophy_item);
 		}
+
+		game_root->setText(0, qstr(data->game_name) + " : " + QString::number(unlocked_trophies) + "| " + QString::number(data->trop_usr->GetTrophiesCount()));
 	}
 }
