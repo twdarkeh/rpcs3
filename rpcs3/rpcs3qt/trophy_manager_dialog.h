@@ -35,6 +35,7 @@ public:
 	explicit trophy_manager_dialog();
 private Q_SLOTS:
 	void OnColClicked(int col);
+	void ResizeTrophyIcons(int val);
 private:
 	/** Loads a trophy folder. 
 	Returns true if successful.  Does not attempt to install if failure occurs, like sceNpTrophy.

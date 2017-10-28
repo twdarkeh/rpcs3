@@ -136,6 +136,7 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 	});
 	
 	connect(m_trophy_tree->header(), &QHeaderView::sectionClicked, this, &trophy_manager_dialog::OnColClicked);
+	connect(icon_slider, &QSlider::valueChanged, this, &trophy_manager_dialog::ResizeTrophyIcons);
 }
 
 bool trophy_manager_dialog::LoadTrophyFolderToDB(const std::string& trop_name, const std::string& game_name)
@@ -205,10 +206,29 @@ void trophy_manager_dialog::OnColClicked(int col)
 	m_trophy_tree->sortByColumn(m_sort_column, m_col_sort_order);
 }
 
+void trophy_manager_dialog::ResizeTrophyIcons(int size)
+{
+	for (int i = 0; i < m_trophy_tree->topLevelItemCount(); ++i)
+	{
+		auto* game = m_trophy_tree->topLevelItem(i);
+		int db_pos = game->data(1, Qt::UserRole).toInt();
+
+		for (int j = 0; j < game->childCount(); ++j)
+		{
+			auto* node = game->child(j);
+			int trophy_id = node->text(TrophyColumns::Id).toInt();
+			node->setData(TrophyColumns::Icon, Qt::DecorationRole, m_trophies_db[db_pos]->trophy_images[trophy_id].scaledToHeight(size));
+			node->setSizeHint(TrophyColumns::Icon, QSize(-1, size));
+		}
+	}
+}
+
 void trophy_manager_dialog::PopulateUI()
 {
-	for (auto& data : m_trophies_db)
+	for (int i = 0; i < m_trophies_db.size(); ++i)
 	{
+		auto& data = m_trophies_db[i];
+
 		std::shared_ptr<rXmlNode> trophy_base = data->trop_config.GetRoot();
 		if (trophy_base->GetChildren()->GetName() == "trophyconf")
 		{
@@ -222,6 +242,7 @@ void trophy_manager_dialog::PopulateUI()
 
 		QTreeWidgetItem* game_root = new QTreeWidgetItem(m_trophy_tree);
 		game_root->setText(0, qstr(data->game_name));
+		game_root->setData(1, Qt::UserRole, i);
 		m_trophy_tree->addTopLevelItem(game_root);
 
 		for (std::shared_ptr<rXmlNode> n = trophy_base->GetChildren(); n; n = n->GetNext())
