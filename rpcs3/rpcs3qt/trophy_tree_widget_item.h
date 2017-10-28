@@ -44,6 +44,5 @@ private:
 		default:
 			return text(TrophyColumns::Id).toInt() < other.text(TrophyColumns::Id).toInt();
 		}
-		return text(column).toLower() < other.text(column).toLower();
 	}
 };

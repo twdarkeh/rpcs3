@@ -117,7 +117,7 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 
 	QVBoxLayout* side_layout = new QVBoxLayout();
 	side_layout->addWidget(settings);
-	QLabel* disclaimer_label = new QLabel("Please note the game must first be played to be displayed.");
+	QLabel* disclaimer_label = new QLabel(tr("Please note the game must first be played to be displayed."));
 	disclaimer_label->setWordWrap(true);
 	disclaimer_label->setAlignment(Qt::AlignCenter);
 	side_layout->addWidget(disclaimer_label);
@@ -232,7 +232,7 @@ void trophy_manager_dialog::ResizeTrophyIcons(int size)
 		{
 			auto* node = game->child(j);
 			int trophy_id = node->text(TrophyColumns::Id).toInt();
-			node->setData(TrophyColumns::Icon, Qt::DecorationRole, m_trophies_db[db_pos]->trophy_images[trophy_id].scaledToHeight(size));
+			node->setData(TrophyColumns::Icon, Qt::DecorationRole, m_trophies_db[db_pos]->trophy_images[trophy_id].scaledToHeight(size, Qt::SmoothTransformation));
 			node->setSizeHint(TrophyColumns::Icon, QSize(-1, size));
 		}
 	}
@@ -284,6 +284,10 @@ void trophy_manager_dialog::ShowContextMenu(const QPoint& loc)
 	QPoint globalPos = m_trophy_tree->mapToGlobal(loc);
 	QMenu* menu = new QMenu();
 	QTreeWidgetItem* item = m_trophy_tree->currentItem();
+	if (!item)
+	{
+		return;
+	}
 
 	QAction* show_trophy_dir = new QAction("Open Trophy Dir", menu);
 
@@ -382,7 +386,7 @@ void trophy_manager_dialog::PopulateUI()
 			}
 
 			trophy_tree_widget_item* trophy_item = new trophy_tree_widget_item(game_root);
-			trophy_item->setData(TrophyColumns::Icon, Qt::DecorationRole, data->trophy_images[trophy_id].scaledToHeight(m_TROPHY_ICON_HEIGHT));
+			trophy_item->setData(TrophyColumns::Icon, Qt::DecorationRole, data->trophy_images[trophy_id].scaledToHeight(m_TROPHY_ICON_HEIGHT, Qt::SmoothTransformation));
 			trophy_item->setSizeHint(TrophyColumns::Icon, QSize(-1, m_TROPHY_ICON_HEIGHT));
 			trophy_item->setText(TrophyColumns::Name, qstr(details.name));
 			trophy_item->setText(TrophyColumns::Description, qstr(details.description));
