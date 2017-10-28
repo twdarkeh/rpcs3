@@ -115,8 +115,15 @@ trophy_manager_dialog::trophy_manager_dialog() : QWidget(), m_sort_column(0), m_
 	settings_layout->addStretch(0);
 	settings->setLayout(settings_layout);
 
+	QVBoxLayout* side_layout = new QVBoxLayout();
+	side_layout->addWidget(settings);
+	QLabel* disclaimer_label = new QLabel("Please note the game must first be played to be displayed.");
+	disclaimer_label->setWordWrap(true);
+	disclaimer_label->setAlignment(Qt::AlignCenter);
+	side_layout->addWidget(disclaimer_label);
+
 	QHBoxLayout* all_layout = new QHBoxLayout(this);
-	all_layout->addWidget(settings);
+	all_layout->addLayout(side_layout);
 	all_layout->addWidget(m_trophy_tree);
 	setLayout(all_layout);
 
@@ -278,10 +285,9 @@ void trophy_manager_dialog::ShowContextMenu(const QPoint& loc)
 	QMenu* menu = new QMenu();
 	QTreeWidgetItem* item = m_trophy_tree->currentItem();
 
-	// If top level node
 	QAction* show_trophy_dir = new QAction("Open Trophy Dir", menu);
 
-	// Only two levels in this tree. So getting the index as such works.
+	// Only two levels in this tree (ignoring root). So getting the index as such works.
 	int db_ind;
 	bool is_game_node = m_trophy_tree->indexOfTopLevelItem(item) != -1;
 	if (is_game_node)

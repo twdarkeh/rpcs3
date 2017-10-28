@@ -54,7 +54,7 @@ private:
 	QTreeWidget* m_trophy_tree; //! UI element to display trophy stuff.
 
 	int m_sort_column = 0; //! Tracks which row we are sorting by.
-	Qt::SortOrder m_col_sort_order = Qt::AscendingOrder; //! Trakcs order in which we are sorting.
+	Qt::SortOrder m_col_sort_order = Qt::AscendingOrder; //! Tracks order in which we are sorting.
 
 	bool m_show_hidden_trophies = false;
 	bool m_show_unlocked_trophies = true;
